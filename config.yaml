@@ -22,9 +22,47 @@ memory:
   # Short-term buffer size, in messages (a turn is two messages).
   short_term_max_messages: 80
 
+audio:
+  input_device: null # null = system default; int index or name string
+  output_device: null
+  sample_rate: 16000
+  frame_ms: 80 # matches openWakeWord's expected 1280-sample chunks
+  wake:
+    backend: openwakeword
+    model: hey_jarvis # pretrained; downloaded on first run
+    threshold: 0.6
+    refractory_s: 2.0
+  vad:
+    backend: silero # silero | energy (pure-Python fallback)
+    speech_threshold: 0.5
+    silence_ms: 800 # trailing quiet that ends an utterance
+    no_speech_timeout_ms: 6000 # give up if nothing is said after wake
+    max_utterance_ms: 30000
+    min_speech_ms: 300
+
+speech:
+  stt:
+    backend: faster_whisper
+    model_size: small # tiny|base|small|medium|large-v3; downloaded on first run
+    device: auto # auto = CUDA if available, else CPU
+    compute_type: auto # float16 on GPU, int8 on CPU
+  tts:
+    backend: piper # piper (local) | elevenlabs (cloud, needs API key)
+    fallback_to_local: true # cloud failure -> Piper, announced aloud
+    piper:
+      # Download voices from https://huggingface.co/rhasspy/piper-voices
+      # and map them per language. Missing languages use default_language.
+      voices:
+        en: models/piper/en_US-lessac-medium.onnx
+        # fr: models/piper/fr_FR-siwis-medium.onnx
+        # de: models/piper/de_DE-thorsten-medium.onnx
+        # ar: models/piper/ar_JO-kareem-medium.onnx
+      default_language: en
+    elevenlabs:
+      voice_id: "" # required when backend: elevenlabs
+      model_id: eleven_multilingual_v2
+
 # Later phases add sections here:
-#   audio:  (Phase 2) wake word, VAD, devices
-#   speech: (Phase 2) stt/tts backends
-#   tools:  (Phase 3) built-in toggles + mcp server mounts
-#   rag:    (Phase 4) embedding model, vector store path
-#   api:    (Phase 5) FastAPI host/port
+#   tools: (Phase 3) built-in toggles + mcp server mounts
+#   rag:   (Phase 4) embedding model, vector store path
+#   api:   (Phase 5) FastAPI host/port

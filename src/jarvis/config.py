@@ -22,11 +22,19 @@ from pydantic_settings import (
 
 __all__ = [
     "AppSection",
+    "AudioSection",
     "ConfigError",
+    "ElevenLabsSection",
     "JarvisSettings",
     "LLMSection",
     "MemorySection",
     "PersonaSection",
+    "PiperSection",
+    "SpeechSection",
+    "SttSection",
+    "TtsSection",
+    "VadSection",
+    "WakeSection",
     "load_settings",
 ]
 
@@ -65,6 +73,81 @@ class MemorySection(BaseModel):
     short_term_max_messages: int = Field(default=80, gt=1)
 
 
+class WakeSection(BaseModel):
+    """Wake-word detection."""
+
+    backend: Literal["openwakeword"] = "openwakeword"
+    model: str = "hey_jarvis"
+    threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    refractory_s: float = Field(default=2.0, ge=0.0)
+
+
+class VadSection(BaseModel):
+    """Voice activity detection and utterance endpointing."""
+
+    backend: Literal["silero", "energy"] = "silero"
+    speech_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    energy_threshold: float = Field(default=0.015, gt=0.0)
+    silence_ms: float = Field(default=800.0, gt=0.0)
+    no_speech_timeout_ms: float = Field(default=6000.0, gt=0.0)
+    max_utterance_ms: float = Field(default=30000.0, gt=0.0)
+    min_speech_ms: float = Field(default=300.0, ge=0.0)
+
+
+class AudioSection(BaseModel):
+    """Microphone and speaker devices plus the audio sub-layers."""
+
+    input_device: int | str | None = None
+    output_device: int | str | None = None
+    sample_rate: int = Field(default=16000, gt=0)
+    frame_ms: int = Field(default=80, gt=0)
+    wake: WakeSection = Field(default_factory=WakeSection)
+    vad: VadSection = Field(default_factory=VadSection)
+
+
+class SttSection(BaseModel):
+    """Speech-to-text backend selection and model sizing."""
+
+    backend: Literal["faster_whisper"] = "faster_whisper"
+    model_size: str = "small"
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+    compute_type: str = "auto"
+
+
+class PiperSection(BaseModel):
+    """Local Piper voices, one .onnx file per language."""
+
+    voices: dict[str, str] = Field(default_factory=dict)
+    default_language: str = "en"
+
+
+class ElevenLabsSection(BaseModel):
+    """Opt-in cloud TTS; the API key lives in .env."""
+
+    voice_id: str = ""
+    model_id: str = "eleven_multilingual_v2"
+
+
+class TtsSection(BaseModel):
+    """Text-to-speech backend selection.
+
+    When a cloud backend is primary and ``fallback_to_local`` is true,
+    Piper takes over on failure and the switch is announced aloud.
+    """
+
+    backend: Literal["piper", "elevenlabs"] = "piper"
+    fallback_to_local: bool = True
+    piper: PiperSection = Field(default_factory=PiperSection)
+    elevenlabs: ElevenLabsSection = Field(default_factory=ElevenLabsSection)
+
+
+class SpeechSection(BaseModel):
+    """STT + TTS configuration."""
+
+    stt: SttSection = Field(default_factory=SttSection)
+    tts: TtsSection = Field(default_factory=TtsSection)
+
+
 class JarvisSettings(BaseSettings):
     """Root settings object assembled from yaml + environment."""
 
@@ -80,10 +163,18 @@ class JarvisSettings(BaseSettings):
     llm: LLMSection = Field(default_factory=LLMSection)
     persona: PersonaSection = Field(default_factory=PersonaSection)
     memory: MemorySection = Field(default_factory=MemorySection)
+    audio: AudioSection = Field(default_factory=AudioSection)
+    speech: SpeechSection = Field(default_factory=SpeechSection)
 
     anthropic_api_key: SecretStr | None = Field(
         default=None,
         validation_alias=AliasChoices("ANTHROPIC_API_KEY", "JARVIS_ANTHROPIC_API_KEY"),
+    )
+    elevenlabs_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "ELEVENLABS_API_KEY", "JARVIS_ELEVENLABS_API_KEY"
+        ),
     )
 
     @classmethod

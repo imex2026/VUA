@@ -18,11 +18,17 @@ dependencies = [
 ]
 
 # Heavy, phase-gated extras. Installed on demand so the core stays lean:
-#   audio (Phase 2): sounddevice, openwakeword, silero-vad, faster-whisper,
-#                    piper-tts
-#   rag   (Phase 4): sentence-transformers, chromadb
-#   api   (Phase 5): fastapi, uvicorn
+#   rag (Phase 4): sentence-transformers, chromadb
+#   api (Phase 5): fastapi, uvicorn
 [project.optional-dependencies]
+audio = [
+    "numpy>=1.26",
+    "sounddevice>=0.4.6",
+    "openwakeword>=0.6",
+    "silero-vad>=5.1",
+    "faster-whisper>=1.0",
+    "piper-tts>=1.2",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -50,6 +56,18 @@ python_version = "3.11"
 strict = true
 mypy_path = "src"
 packages = ["jarvis"]
+
+[[tool.mypy.overrides]]
+module = [
+    "faster_whisper.*",
+    "numpy.*",
+    "openwakeword.*",
+    "piper.*",
+    "silero_vad.*",
+    "sounddevice.*",
+    "torch.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

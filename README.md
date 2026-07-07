@@ -82,7 +82,7 @@ Design rules:
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Skeleton, config, logging, EventBus, Claude brain, CLI REPL | done |
-| 2 | Audio (wake word, VAD) + speech (faster-whisper STT, Piper TTS) | planned |
+| 2 | Audio (wake word, VAD) + speech (faster-whisper STT, Piper TTS) | done |
 | 3 | Tool registry, built-in tools, MCP client adapter | planned |
 | 4 | Long-term semantic memory (RAG) with fact extraction | planned |
 | 5 | FastAPI interface, mypy strict pass, full test suite, docs | planned |
@@ -103,6 +103,39 @@ jarvis chat
 In the REPL: `/reset` clears the conversation, `/help` lists commands,
 `/quit` (or Ctrl-D) exits. `jarvis --config path/to/config.yaml chat`
 uses an alternate config.
+
+### Voice mode
+
+```bash
+pip install -e ".[audio]"          # sounddevice, openwakeword, silero-vad,
+                                   # faster-whisper, piper-tts
+```
+
+Then download at least one Piper voice from
+<https://huggingface.co/rhasspy/piper-voices> (both the `.onnx` and its
+`.onnx.json` sidecar), point `speech.tts.piper.voices` in `config.yaml`
+at it, and run:
+
+```bash
+jarvis listen
+```
+
+Say **"hey jarvis"**, wait for the log line, and speak. Notes:
+
+- The openWakeWord and whisper models download automatically on first
+  run; the first `listen` needs network once, afterwards everything is
+  offline.
+- STT auto-detects Arabic, French, English, and German, and the reply
+  is synthesized with the Piper voice mapped to that language (falling
+  back to `default_language`).
+- With a CUDA GPU, `speech.stt.device: auto` picks it up automatically;
+  bump `model_size` to `medium` or `large-v3` for better accuracy.
+- To use ElevenLabs for speech output, set `speech.tts.backend:
+  elevenlabs`, a `voice_id`, and `ELEVENLABS_API_KEY` in `.env`. If the
+  cloud is unreachable, Jarvis switches to Piper and says so aloud
+  (`fallback_to_local: true`).
+- No barge-in yet: the mic is ignored while Jarvis is thinking or
+  speaking (frames are dropped by timestamp so it can't wake itself).
 
 ## Development
 
@@ -127,8 +160,8 @@ src/jarvis/
 ├── log.py           # structlog setup, trace IDs
 ├── brain/           # llm.py (protocol + Anthropic), orchestrator.py, persona.py
 ├── memory/          # short_term.py (long-term RAG arrives in Phase 4)
-├── interfaces/      # cli.py (voice in Phase 2, HTTP in Phase 5)
-├── audio/           # Phase 2
-├── speech/          # Phase 2
+├── interfaces/      # cli.py, voice.py (HTTP in Phase 5)
+├── audio/           # capture, wake word, VAD, endpointing, playback
+├── speech/          # stt.py (faster-whisper), tts.py (Piper/ElevenLabs)
 └── tools/           # Phase 3
 ```
