@@ -1,0 +1,30 @@
+# Jarvis configuration. Validated by pydantic-settings (src/jarvis/config.py).
+# Environment variables override this file: JARVIS_LLM__MODEL=... etc.
+# Secrets (API keys) go in .env, never here.
+
+app:
+  log_level: INFO
+  log_format: console # console | json
+
+llm:
+  backend: anthropic
+  model: claude-sonnet-5
+  max_tokens: 1024
+  temperature: 0.7
+
+persona:
+  name: Jarvis
+  languages: [en, fr, de, ar]
+  # Appended verbatim to the system prompt for per-user tweaks.
+  extra_instructions: ""
+
+memory:
+  # Short-term buffer size, in messages (a turn is two messages).
+  short_term_max_messages: 80
+
+# Later phases add sections here:
+#   audio:  (Phase 2) wake word, VAD, devices
+#   speech: (Phase 2) stt/tts backends
+#   tools:  (Phase 3) built-in toggles + mcp server mounts
+#   rag:    (Phase 4) embedding model, vector store path
+#   api:    (Phase 5) FastAPI host/port

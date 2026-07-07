@@ -1,0 +1,6 @@
+# flake8 cannot read pyproject.toml, so it gets its own file.
+[flake8]
+max-line-length = 88
+# E203 and W503 conflict with black's formatting choices.
+extend-ignore = E203, W503
+exclude = .git,__pycache__,.venv,build,dist
