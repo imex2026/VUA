@@ -21,6 +21,18 @@ persona:
 memory:
   # Short-term buffer size, in messages (a turn is two messages).
   short_term_max_messages: 80
+  # Long-term semantic memory (RAG). Needs: pip install -e ".[rag]"
+  # If those packages are missing, Jarvis logs a warning and runs
+  # stateless instead of failing.
+  long_term:
+    enabled: true
+    auto_extract: true # LLM distills durable facts after each turn
+    # Multilingual model so ar/fr/en/de memories share one space.
+    embedding_model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+    store_path: data/memory # Chroma persists here
+    top_k: 4 # memories injected per turn (at most)
+    min_score: 0.35 # cosine similarity floor for recall
+    dedupe_score: 0.92 # skip near-identical facts on store
 
 audio:
   input_device: null # null = system default; int index or name string

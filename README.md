@@ -84,7 +84,7 @@ Design rules:
 | 1 | Skeleton, config, logging, EventBus, Claude brain, CLI REPL | done |
 | 2 | Audio (wake word, VAD) + speech (faster-whisper STT, Piper TTS) | done |
 | 3 | Tool registry, built-in tools, MCP client adapter | done |
-| 4 | Long-term semantic memory (RAG) with fact extraction | planned |
+| 4 | Long-term semantic memory (RAG) with fact extraction | done |
 | 5 | FastAPI interface, mypy strict pass, full test suite, docs | planned |
 
 ## Setup
@@ -157,6 +157,24 @@ headers, commands, and env expands from the environment so tokens stay
 in `.env`. A server's tools appear as `<server>_<tool>`; a server that
 fails to connect is skipped with a warning so Jarvis still starts.
 
+### Long-term memory
+
+```bash
+pip install -e ".[rag]"            # sentence-transformers, chromadb
+```
+
+Jarvis remembers things across restarts. After each turn, a background
+LLM call distills durable facts ("The user's daughter is called Lina")
+from the exchange; facts are embedded with a **multilingual**
+sentence-transformers model (so an Arabic conversation can recall a
+fact learned in French) and stored in a local Chroma index under
+`memory.long_term.store_path`. Before each reply, the top `top_k`
+facts relevant to your message (cosine similarity >= `min_score`) are
+injected into the system context. Near-duplicate facts are skipped on
+store (`dedupe_score`), memory failures never block a reply, and if the
+`rag` packages aren't installed Jarvis logs a warning and simply runs
+stateless. Delete the store directory to wipe its memory.
+
 ## Development
 
 ```bash
@@ -179,7 +197,7 @@ src/jarvis/
 ├── events.py        # typed events + async EventBus
 ├── log.py           # structlog setup, trace IDs
 ├── brain/           # llm.py (protocol + Anthropic), orchestrator.py, persona.py
-├── memory/          # short_term.py (long-term RAG arrives in Phase 4)
+├── memory/          # short_term.py, long_term.py (RAG), extraction.py
 ├── interfaces/      # cli.py, voice.py (HTTP in Phase 5)
 ├── audio/           # capture, wake word, VAD, endpointing, playback
 ├── speech/          # stt.py (faster-whisper), tts.py (Piper/ElevenLabs)

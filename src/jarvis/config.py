@@ -27,6 +27,7 @@ __all__ = [
     "ElevenLabsSection",
     "JarvisSettings",
     "LLMSection",
+    "LongTermMemorySection",
     "McpServerConfig",
     "MemorySection",
     "PersonaSection",
@@ -69,10 +70,27 @@ class PersonaSection(BaseModel):
     extra_instructions: str = ""
 
 
+class LongTermMemorySection(BaseModel):
+    """Long-term semantic memory (RAG) settings.
+
+    Requires the ``rag`` extra; when its packages are missing, memory
+    is disabled with a warning and Jarvis runs stateless.
+    """
+
+    enabled: bool = True
+    auto_extract: bool = True
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    store_path: str = "data/memory"
+    top_k: int = Field(default=4, gt=0)
+    min_score: float = Field(default=0.35, ge=0.0, le=1.0)
+    dedupe_score: float = Field(default=0.92, ge=0.0, le=1.0)
+
+
 class MemorySection(BaseModel):
-    """Conversation memory sizing (long-term store arrives in Phase 4)."""
+    """Short-term buffer sizing and the long-term store."""
 
     short_term_max_messages: int = Field(default=80, gt=1)
+    long_term: LongTermMemorySection = Field(default_factory=LongTermMemorySection)
 
 
 class WakeSection(BaseModel):

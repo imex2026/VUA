@@ -9,6 +9,8 @@ import structlog
 
 if TYPE_CHECKING:
     from jarvis.interfaces.voice import VoicePipeline
+    from jarvis.memory.extraction import FactExtractor
+    from jarvis.memory.long_term import LongTermMemory
     from jarvis.speech.tts import TtsBackend
 
 from jarvis.brain.llm import AnthropicBackend
@@ -91,6 +93,51 @@ class JarvisApp:
         self._log.info("tools_ready", tools=registry.names())
         return registry
 
+    def _build_long_term_memory(
+        self, backend: AnthropicBackend
+    ) -> tuple["LongTermMemory | None", "FactExtractor | None"]:
+        """Build the RAG memory, degrading gracefully when the ``rag``
+        extra is not installed."""
+        import importlib.util
+
+        cfg = self._settings.memory.long_term
+        if not cfg.enabled:
+            return None, None
+        missing = [
+            module
+            for module in ("chromadb", "sentence_transformers")
+            if importlib.util.find_spec(module) is None
+        ]
+        if missing:
+            self._log.warning(
+                "long_term_memory_disabled",
+                missing=missing,
+                hint="pip install -e '.[rag]'",
+            )
+            return None, None
+
+        from jarvis.memory.extraction import FactExtractor
+        from jarvis.memory.long_term import (
+            ChromaVectorStore,
+            LongTermMemory,
+            SentenceTransformerEmbedder,
+        )
+
+        memory = LongTermMemory(
+            embedder=SentenceTransformerEmbedder(cfg.embedding_model),
+            store=ChromaVectorStore(cfg.store_path),
+            top_k=cfg.top_k,
+            min_score=cfg.min_score,
+            dedupe_score=cfg.dedupe_score,
+        )
+        extractor = FactExtractor(backend) if cfg.auto_extract else None
+        self._log.info(
+            "long_term_memory_ready",
+            store=cfg.store_path,
+            auto_extract=cfg.auto_extract,
+        )
+        return memory, extractor
+
     def build_brain(self, tools: ToolRegistry | None = None) -> Brain:
         """Assemble the brain from the configured LLM backend."""
         settings = self._settings
@@ -108,6 +155,7 @@ class JarvisApp:
         history = ConversationBuffer(
             max_messages=settings.memory.short_term_max_messages
         )
+        memory, extractor = self._build_long_term_memory(backend)
         self._log.info("brain_ready", model=settings.llm.model)
         return Brain(
             llm=backend,
@@ -116,6 +164,8 @@ class JarvisApp:
             bus=self._bus,
             tools=tools,
             max_tool_iterations=settings.tools.max_tool_iterations,
+            memory=memory,
+            extractor=extractor,
         )
 
     async def _shutdown(self) -> None:
@@ -126,11 +176,14 @@ class JarvisApp:
 
     async def run_cli(self) -> None:
         """Run the text REPL until the user exits."""
+        brain: Brain | None = None
         try:
             brain = self.build_brain(await self.build_tools())
             repl = CliRepl(brain, assistant_name=self._settings.persona.name)
             await repl.run()
         finally:
+            if brain is not None:
+                await brain.join_background()
             await self._shutdown()
 
     def _build_tts(self) -> tuple["TtsBackend", "TtsBackend | None"]:
@@ -217,9 +270,12 @@ class JarvisApp:
 
     async def run_voice(self) -> None:
         """Run the wake-word -> STT -> brain -> TTS loop until cancelled."""
+        brain: Brain | None = None
         try:
             brain = self.build_brain(await self.build_tools())
             pipeline = self.build_voice_pipeline(brain)
             await pipeline.run()
         finally:
+            if brain is not None:
+                await brain.join_background()
             await self._shutdown()

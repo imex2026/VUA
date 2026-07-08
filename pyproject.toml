@@ -19,9 +19,12 @@ dependencies = [
 ]
 
 # Heavy, phase-gated extras. Installed on demand so the core stays lean:
-#   rag (Phase 4): sentence-transformers, chromadb
 #   api (Phase 5): fastapi, uvicorn
 [project.optional-dependencies]
+rag = [
+    "chromadb>=0.5",
+    "sentence-transformers>=3.0",
+]
 audio = [
     "numpy>=1.26",
     "sounddevice>=0.4.6",
@@ -60,10 +63,12 @@ packages = ["jarvis"]
 
 [[tool.mypy.overrides]]
 module = [
+    "chromadb.*",
     "faster_whisper.*",
     "numpy.*",
     "openwakeword.*",
     "piper.*",
+    "sentence_transformers.*",
     "silero_vad.*",
     "sounddevice.*",
     "torch.*",
