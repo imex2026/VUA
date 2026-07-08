@@ -30,7 +30,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "chat: text REPL (default). "
             "listen: voice pipeline (requires the [audio] extra). "
-            "serve: HTTP API (Phase 5)."
+            "serve: HTTP API (requires the [api] extra)."
         ),
     )
     parser.add_argument(
@@ -47,14 +47,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Parse arguments and run the selected interface."""
     args = _build_parser().parse_args(argv)
 
-    if args.command == "serve":
-        print("'serve' is not available yet (it arrives in Phase 5).")
-        return 2
-
     try:
         app = JarvisApp.from_config(args.config)
         if args.command == "listen":
             asyncio.run(app.run_voice())
+        elif args.command == "serve":
+            asyncio.run(app.run_serve())
         else:
             asyncio.run(app.run_cli())
     except ConfigError as exc:

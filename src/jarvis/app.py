@@ -279,3 +279,37 @@ class JarvisApp:
             if brain is not None:
                 await brain.join_background()
             await self._shutdown()
+
+    async def run_serve(self) -> None:
+        """Serve the HTTP API until interrupted."""
+        import importlib.util
+
+        missing = [
+            module
+            for module in ("fastapi", "uvicorn")
+            if importlib.util.find_spec(module) is None
+        ]
+        if missing:
+            raise ConfigError(
+                f"The HTTP API needs {', '.join(missing)}. "
+                "Run: pip install -e '.[api]'"
+            )
+        import uvicorn
+
+        from jarvis import __version__
+        from jarvis.interfaces.api import create_api
+
+        brain: Brain | None = None
+        try:
+            brain = self.build_brain(await self.build_tools())
+            api = create_api(brain, version=__version__)
+            cfg = self._settings.api
+            self._log.info("api_listening", host=cfg.host, port=cfg.port)
+            server = uvicorn.Server(
+                uvicorn.Config(api, host=cfg.host, port=cfg.port, log_config=None)
+            )
+            await server.serve()
+        finally:
+            if brain is not None:
+                await brain.join_background()
+            await self._shutdown()

@@ -21,6 +21,7 @@ from pydantic_settings import (
 )
 
 __all__ = [
+    "ApiSection",
     "AppSection",
     "AudioSection",
     "ConfigError",
@@ -184,6 +185,13 @@ class McpServerConfig(BaseModel):
     env: dict[str, str] = Field(default_factory=dict)
 
 
+class ApiSection(BaseModel):
+    """HTTP API server binding (``jarvis serve``)."""
+
+    host: str = "127.0.0.1"
+    port: int = Field(default=8765, gt=0, lt=65536)
+
+
 class ToolsSection(BaseModel):
     """Which tools are available to the brain."""
 
@@ -219,6 +227,7 @@ class JarvisSettings(BaseSettings):
     audio: AudioSection = Field(default_factory=AudioSection)
     speech: SpeechSection = Field(default_factory=SpeechSection)
     tools: ToolsSection = Field(default_factory=ToolsSection)
+    api: ApiSection = Field(default_factory=ApiSection)
 
     anthropic_api_key: SecretStr | None = Field(
         default=None,

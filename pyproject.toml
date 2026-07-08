@@ -18,9 +18,12 @@ dependencies = [
     "structlog>=24.1",
 ]
 
-# Heavy, phase-gated extras. Installed on demand so the core stays lean:
-#   api (Phase 5): fastapi, uvicorn
+# Heavy extras, installed on demand so the core stays lean.
 [project.optional-dependencies]
+api = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
 rag = [
     "chromadb>=0.5",
     "sentence-transformers>=3.0",
@@ -40,6 +43,8 @@ dev = [
     "flake8>=7.0",
     "mypy>=1.10",
     "types-PyYAML",
+    # for testing the HTTP interface without the full [api] extra
+    "fastapi>=0.110",
 ]
 
 [project.scripts]

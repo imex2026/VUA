@@ -19,12 +19,12 @@ flowchart TB
         API[FastAPI /chat]
     end
 
-    subgraph Audio["Audio layer (Phase 2)"]
+    subgraph Audio["Audio layer"]
         MIC[Mic capture<br/>sounddevice] --> WAKE[Wake word<br/>openWakeWord]
         MIC --> VAD[Silero VAD]
     end
 
-    subgraph Speech["Speech layer (Phase 2)"]
+    subgraph Speech["Speech layer"]
         STT[STT protocol<br/>faster-whisper, auto-lang ar/fr/en/de]
         TTS[TTS protocol<br/>Piper local - cloud opt-in]
     end
@@ -36,7 +36,7 @@ flowchart TB
         LLM[LLM protocol<br/>Anthropic SDK]
     end
 
-    subgraph Tools["Tool layer (Phase 3)"]
+    subgraph Tools["Tool layer"]
         REG[Tool registry]
         REG --> BUILTIN[web search - calendar -<br/>smart home - files]
         REG --> MCP[MCP client adapter]
@@ -44,7 +44,7 @@ flowchart TB
 
     subgraph Memory["Memory layer"]
         STM[Short-term buffer]
-        LTM[Long-term RAG (Phase 4)<br/>sentence-transformers + Chroma]
+        LTM[Long-term RAG<br/>sentence-transformers + Chroma]
     end
 
     WAKE -->|WakeDetected| BUS
@@ -85,7 +85,10 @@ Design rules:
 | 2 | Audio (wake word, VAD) + speech (faster-whisper STT, Piper TTS) | done |
 | 3 | Tool registry, built-in tools, MCP client adapter | done |
 | 4 | Long-term semantic memory (RAG) with fact extraction | done |
-| 5 | FastAPI interface, mypy strict pass, full test suite, docs | planned |
+| 5 | FastAPI interface, mypy strict pass, full test suite, docs | done |
+
+(There was no legacy codebase to preserve: the repository was empty
+when this rebuild started, so no `legacy/` directory exists.)
 
 ## Setup
 
@@ -157,6 +160,30 @@ headers, commands, and env expands from the environment so tokens stay
 in `.env`. A server's tools appear as `<server>_<tool>`; a server that
 fails to connect is skipped with a warning so Jarvis still starts.
 
+### HTTP API
+
+```bash
+pip install -e ".[api]"            # fastapi, uvicorn
+jarvis serve                       # binds api.host:api.port (127.0.0.1:8765)
+```
+
+The API drives the same brain (tools + memory included), serving one
+conversation with turns serialized in order:
+
+```bash
+curl localhost:8765/health
+curl -X POST localhost:8765/chat \
+     -H 'Content-Type: application/json' \
+     -d '{"message": "turn on the living room light"}'
+curl -N -X POST localhost:8765/chat/stream \
+     -H 'Content-Type: application/json' \
+     -d '{"message": "tell me a short story"}'   # streams text chunks
+curl -X POST localhost:8765/reset
+```
+
+Interactive OpenAPI docs are at `/docs`. There is no authentication -
+keep it bound to localhost or put it behind a reverse proxy.
+
 ### Long-term memory
 
 ```bash
@@ -174,6 +201,21 @@ injected into the system context. Near-duplicate facts are skipped on
 store (`dedupe_score`), memory failures never block a reply, and if the
 `rag` packages aren't installed Jarvis logs a warning and simply runs
 stateless. Delete the store directory to wipe its memory.
+
+## Windows notes
+
+Everything runs on Windows; the differences are small:
+
+- Activate the venv with `.venv\Scripts\activate`; install extras the
+  same way (`pip install -e ".[audio,rag,api]"`).
+- Audio I/O uses PortAudio via the bundled `sounddevice` wheels - no
+  extra install. Wake word inference is forced to ONNX runtime
+  specifically because the tflite runtime is unavailable on Windows.
+- For CUDA STT, faster-whisper (CTranslate2) needs the cuDNN 9 /
+  cuBLAS DLLs on `PATH`; otherwise leave `speech.stt.device: auto` and
+  it falls back to CPU int8 silently.
+- Use forward slashes or escaped backslashes for voice paths in
+  `config.yaml` (YAML treats `\` as an escape inside double quotes).
 
 ## Development
 
@@ -198,7 +240,7 @@ src/jarvis/
 ├── log.py           # structlog setup, trace IDs
 ├── brain/           # llm.py (protocol + Anthropic), orchestrator.py, persona.py
 ├── memory/          # short_term.py, long_term.py (RAG), extraction.py
-├── interfaces/      # cli.py, voice.py (HTTP in Phase 5)
+├── interfaces/      # cli.py, voice.py, api.py
 ├── audio/           # capture, wake word, VAD, endpointing, playback
 ├── speech/          # stt.py (faster-whisper), tts.py (Piper/ElevenLabs)
 └── tools/           # base.py (protocol + registry), builtin/, mcp_adapter.py

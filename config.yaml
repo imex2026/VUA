@@ -94,6 +94,7 @@ tools:
   #   command: npx
   #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/some/dir"]
 
-# Later phases add sections here:
-#   rag: (Phase 4) embedding model, vector store path
-#   api: (Phase 5) FastAPI host/port
+# HTTP API (jarvis serve). Needs: pip install -e ".[api]"
+api:
+  host: 127.0.0.1 # bind to 0.0.0.0 to expose on the network
+  port: 8765
