@@ -62,7 +62,26 @@ speech:
       voice_id: "" # required when backend: elevenlabs
       model_id: eleven_multilingual_v2
 
+tools:
+  enabled: [web_search, calendar, smart_home, files]
+  files_root: data/files # sandbox for the 'files' tool
+  calendar_path: data/calendar.json
+  max_tool_iterations: 8 # tool-use rounds allowed per user turn
+  # External MCP servers mounted as tools at startup. ${VAR} in url,
+  # headers, command, args, and env expands from the environment, so
+  # tokens stay in .env. A server that fails to connect is skipped
+  # with a warning; Jarvis still starts.
+  mcp_servers: []
+  # - name: n8n
+  #   transport: streamable_http # streamable_http | sse | stdio
+  #   url: https://your-instance.n8n.cloud/mcp/your-path
+  #   headers:
+  #     Authorization: "Bearer ${N8N_MCP_TOKEN}"
+  # - name: fs
+  #   transport: stdio
+  #   command: npx
+  #   args: ["-y", "@modelcontextprotocol/server-filesystem", "/some/dir"]
+
 # Later phases add sections here:
-#   tools: (Phase 3) built-in toggles + mcp server mounts
-#   rag:   (Phase 4) embedding model, vector store path
-#   api:   (Phase 5) FastAPI host/port
+#   rag: (Phase 4) embedding model, vector store path
+#   api: (Phase 5) FastAPI host/port

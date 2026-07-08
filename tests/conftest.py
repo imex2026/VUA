@@ -18,11 +18,15 @@ from jarvis.speech.tts import TtsError
 
 
 class FakeLLM:
-    """An LLMBackend that replays scripted replies and records calls."""
+    """An LLMBackend that replays scripted replies and records calls.
+
+    A reply may be a plain string (streamed as text deltas) or a list
+    of :data:`LLMEvent` objects for scripting tool-use rounds.
+    """
 
     def __init__(
         self,
-        replies: list[str] | None = None,
+        replies: list[str | list[LLMEvent]] | None = None,
         *,
         error: LLMError | None = None,
         chunk_size: int = 4,
@@ -37,11 +41,22 @@ class FakeLLM:
         *,
         system: str,
         messages: Sequence[ChatMessage],
+        tools: Sequence[dict[str, Any]] | None = None,
     ) -> AsyncIterator[LLMEvent]:
-        self.calls.append({"system": system, "messages": list(messages)})
+        self.calls.append(
+            {
+                "system": system,
+                "messages": list(messages),
+                "tools": list(tools) if tools is not None else None,
+            }
+        )
         if self.error is not None:
             raise self.error
         reply = self.replies.pop(0) if self.replies else "ok"
+        if isinstance(reply, list):
+            for event in reply:
+                yield event
+            return
         for start in range(0, len(reply), self.chunk_size):
             yield TextDelta(reply[start : start + self.chunk_size])
         yield ResponseComplete(

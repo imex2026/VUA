@@ -83,7 +83,7 @@ Design rules:
 |---|---|---|
 | 1 | Skeleton, config, logging, EventBus, Claude brain, CLI REPL | done |
 | 2 | Audio (wake word, VAD) + speech (faster-whisper STT, Piper TTS) | done |
-| 3 | Tool registry, built-in tools, MCP client adapter | planned |
+| 3 | Tool registry, built-in tools, MCP client adapter | done |
 | 4 | Long-term semantic memory (RAG) with fact extraction | planned |
 | 5 | FastAPI interface, mypy strict pass, full test suite, docs | planned |
 
@@ -137,6 +137,26 @@ Say **"hey jarvis"**, wait for the log line, and speak. Notes:
 - No barge-in yet: the mic is ignored while Jarvis is thinking or
   speaking (frames are dropped by timestamp so it can't wake itself).
 
+### Tools
+
+Claude decides when to call tools (native tool use); results feed back
+into the conversation automatically, in both chat and voice modes.
+Built-ins, toggled via `tools.enabled` in `config.yaml`:
+
+| Tool | What it does |
+|---|---|
+| `web_search` | Brave Search API if `BRAVE_SEARCH_API_KEY` is set, keyless DuckDuckGo fallback otherwise |
+| `calendar` | Local calendar/reminders in a JSON file (add / list / remove) |
+| `smart_home` | Simulation stub with in-memory device state - swap in Home Assistant/MQTT later |
+| `files` | Read/write/list text files, sandboxed to `tools.files_root` |
+
+**MCP servers** (e.g. n8n Cloud) mount as tools at startup from
+`tools.mcp_servers` - see the commented example in `config.yaml`.
+Transports: `streamable_http`, `sse`, `stdio`. `${VAR}` in urls,
+headers, commands, and env expands from the environment so tokens stay
+in `.env`. A server's tools appear as `<server>_<tool>`; a server that
+fails to connect is skipped with a warning so Jarvis still starts.
+
 ## Development
 
 ```bash
@@ -163,5 +183,5 @@ src/jarvis/
 ├── interfaces/      # cli.py, voice.py (HTTP in Phase 5)
 ├── audio/           # capture, wake word, VAD, endpointing, playback
 ├── speech/          # stt.py (faster-whisper), tts.py (Piper/ElevenLabs)
-└── tools/           # Phase 3
+└── tools/           # base.py (protocol + registry), builtin/, mcp_adapter.py
 ```

@@ -27,11 +27,13 @@ __all__ = [
     "ElevenLabsSection",
     "JarvisSettings",
     "LLMSection",
+    "McpServerConfig",
     "MemorySection",
     "PersonaSection",
     "PiperSection",
     "SpeechSection",
     "SttSection",
+    "ToolsSection",
     "TtsSection",
     "VadSection",
     "WakeSection",
@@ -148,6 +150,39 @@ class SpeechSection(BaseModel):
     tts: TtsSection = Field(default_factory=TtsSection)
 
 
+class McpServerConfig(BaseModel):
+    """One external MCP server to mount as tools.
+
+    ``${VAR}`` in url/headers/command/args/env is expanded from the
+    environment at connect time, so tokens stay in .env.
+    """
+
+    name: str
+    transport: Literal["stdio", "streamable_http", "sse"] = "streamable_http"
+    url: str = ""
+    headers: dict[str, str] = Field(default_factory=dict)
+    command: str = ""
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+class ToolsSection(BaseModel):
+    """Which tools are available to the brain."""
+
+    enabled: list[str] = Field(
+        default_factory=lambda: [
+            "web_search",
+            "calendar",
+            "smart_home",
+            "files",
+        ]
+    )
+    files_root: str = "data/files"
+    calendar_path: str = "data/calendar.json"
+    max_tool_iterations: int = Field(default=8, gt=0)
+    mcp_servers: list[McpServerConfig] = Field(default_factory=list)
+
+
 class JarvisSettings(BaseSettings):
     """Root settings object assembled from yaml + environment."""
 
@@ -165,6 +200,7 @@ class JarvisSettings(BaseSettings):
     memory: MemorySection = Field(default_factory=MemorySection)
     audio: AudioSection = Field(default_factory=AudioSection)
     speech: SpeechSection = Field(default_factory=SpeechSection)
+    tools: ToolsSection = Field(default_factory=ToolsSection)
 
     anthropic_api_key: SecretStr | None = Field(
         default=None,
@@ -174,6 +210,12 @@ class JarvisSettings(BaseSettings):
         default=None,
         validation_alias=AliasChoices(
             "ELEVENLABS_API_KEY", "JARVIS_ELEVENLABS_API_KEY"
+        ),
+    )
+    brave_search_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "BRAVE_SEARCH_API_KEY", "JARVIS_BRAVE_SEARCH_API_KEY"
         ),
     )
 
