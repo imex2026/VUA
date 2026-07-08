@@ -21,12 +21,24 @@ from pydantic_settings import (
 )
 
 __all__ = [
+    "ApiSection",
     "AppSection",
+    "AudioSection",
     "ConfigError",
+    "ElevenLabsSection",
     "JarvisSettings",
     "LLMSection",
+    "LongTermMemorySection",
+    "McpServerConfig",
     "MemorySection",
     "PersonaSection",
+    "PiperSection",
+    "SpeechSection",
+    "SttSection",
+    "ToolsSection",
+    "TtsSection",
+    "VadSection",
+    "WakeSection",
     "load_settings",
 ]
 
@@ -59,10 +71,142 @@ class PersonaSection(BaseModel):
     extra_instructions: str = ""
 
 
+class LongTermMemorySection(BaseModel):
+    """Long-term semantic memory (RAG) settings.
+
+    Requires the ``rag`` extra; when its packages are missing, memory
+    is disabled with a warning and Jarvis runs stateless.
+    """
+
+    enabled: bool = True
+    auto_extract: bool = True
+    embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    store_path: str = "data/memory"
+    top_k: int = Field(default=4, gt=0)
+    min_score: float = Field(default=0.35, ge=0.0, le=1.0)
+    dedupe_score: float = Field(default=0.92, ge=0.0, le=1.0)
+
+
 class MemorySection(BaseModel):
-    """Conversation memory sizing (long-term store arrives in Phase 4)."""
+    """Short-term buffer sizing and the long-term store."""
 
     short_term_max_messages: int = Field(default=80, gt=1)
+    long_term: LongTermMemorySection = Field(default_factory=LongTermMemorySection)
+
+
+class WakeSection(BaseModel):
+    """Wake-word detection."""
+
+    backend: Literal["openwakeword"] = "openwakeword"
+    model: str = "hey_jarvis"
+    threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    refractory_s: float = Field(default=2.0, ge=0.0)
+
+
+class VadSection(BaseModel):
+    """Voice activity detection and utterance endpointing."""
+
+    backend: Literal["silero", "energy"] = "silero"
+    speech_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+    energy_threshold: float = Field(default=0.015, gt=0.0)
+    silence_ms: float = Field(default=800.0, gt=0.0)
+    no_speech_timeout_ms: float = Field(default=6000.0, gt=0.0)
+    max_utterance_ms: float = Field(default=30000.0, gt=0.0)
+    min_speech_ms: float = Field(default=300.0, ge=0.0)
+
+
+class AudioSection(BaseModel):
+    """Microphone and speaker devices plus the audio sub-layers."""
+
+    input_device: int | str | None = None
+    output_device: int | str | None = None
+    sample_rate: int = Field(default=16000, gt=0)
+    frame_ms: int = Field(default=80, gt=0)
+    wake: WakeSection = Field(default_factory=WakeSection)
+    vad: VadSection = Field(default_factory=VadSection)
+
+
+class SttSection(BaseModel):
+    """Speech-to-text backend selection and model sizing."""
+
+    backend: Literal["faster_whisper"] = "faster_whisper"
+    model_size: str = "small"
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+    compute_type: str = "auto"
+
+
+class PiperSection(BaseModel):
+    """Local Piper voices, one .onnx file per language."""
+
+    voices: dict[str, str] = Field(default_factory=dict)
+    default_language: str = "en"
+
+
+class ElevenLabsSection(BaseModel):
+    """Opt-in cloud TTS; the API key lives in .env."""
+
+    voice_id: str = ""
+    model_id: str = "eleven_multilingual_v2"
+
+
+class TtsSection(BaseModel):
+    """Text-to-speech backend selection.
+
+    When a cloud backend is primary and ``fallback_to_local`` is true,
+    Piper takes over on failure and the switch is announced aloud.
+    """
+
+    backend: Literal["piper", "elevenlabs"] = "piper"
+    fallback_to_local: bool = True
+    piper: PiperSection = Field(default_factory=PiperSection)
+    elevenlabs: ElevenLabsSection = Field(default_factory=ElevenLabsSection)
+
+
+class SpeechSection(BaseModel):
+    """STT + TTS configuration."""
+
+    stt: SttSection = Field(default_factory=SttSection)
+    tts: TtsSection = Field(default_factory=TtsSection)
+
+
+class McpServerConfig(BaseModel):
+    """One external MCP server to mount as tools.
+
+    ``${VAR}`` in url/headers/command/args/env is expanded from the
+    environment at connect time, so tokens stay in .env.
+    """
+
+    name: str
+    transport: Literal["stdio", "streamable_http", "sse"] = "streamable_http"
+    url: str = ""
+    headers: dict[str, str] = Field(default_factory=dict)
+    command: str = ""
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
+class ApiSection(BaseModel):
+    """HTTP API server binding (``jarvis serve``)."""
+
+    host: str = "127.0.0.1"
+    port: int = Field(default=8765, gt=0, lt=65536)
+
+
+class ToolsSection(BaseModel):
+    """Which tools are available to the brain."""
+
+    enabled: list[str] = Field(
+        default_factory=lambda: [
+            "web_search",
+            "calendar",
+            "smart_home",
+            "files",
+        ]
+    )
+    files_root: str = "data/files"
+    calendar_path: str = "data/calendar.json"
+    max_tool_iterations: int = Field(default=8, gt=0)
+    mcp_servers: list[McpServerConfig] = Field(default_factory=list)
 
 
 class JarvisSettings(BaseSettings):
@@ -80,10 +224,26 @@ class JarvisSettings(BaseSettings):
     llm: LLMSection = Field(default_factory=LLMSection)
     persona: PersonaSection = Field(default_factory=PersonaSection)
     memory: MemorySection = Field(default_factory=MemorySection)
+    audio: AudioSection = Field(default_factory=AudioSection)
+    speech: SpeechSection = Field(default_factory=SpeechSection)
+    tools: ToolsSection = Field(default_factory=ToolsSection)
+    api: ApiSection = Field(default_factory=ApiSection)
 
     anthropic_api_key: SecretStr | None = Field(
         default=None,
         validation_alias=AliasChoices("ANTHROPIC_API_KEY", "JARVIS_ANTHROPIC_API_KEY"),
+    )
+    elevenlabs_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "ELEVENLABS_API_KEY", "JARVIS_ELEVENLABS_API_KEY"
+        ),
+    )
+    brave_search_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "BRAVE_SEARCH_API_KEY", "JARVIS_BRAVE_SEARCH_API_KEY"
+        ),
     )
 
     @classmethod

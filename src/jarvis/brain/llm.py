@@ -20,6 +20,7 @@ __all__ = [
     "LLMEvent",
     "ResponseComplete",
     "TextDelta",
+    "ToolUseRequest",
 ]
 
 
@@ -47,6 +48,15 @@ class TextDelta:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolUseRequest:
+    """The model wants a tool executed before it can finish."""
+
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
 class ResponseComplete:
     """Terminal stream event carrying stop reason and token usage."""
 
@@ -55,7 +65,7 @@ class ResponseComplete:
     output_tokens: int
 
 
-LLMEvent = TextDelta | ResponseComplete
+LLMEvent = TextDelta | ToolUseRequest | ResponseComplete
 
 
 class LLMBackend(Protocol):
@@ -66,8 +76,14 @@ class LLMBackend(Protocol):
         *,
         system: str,
         messages: Sequence[ChatMessage],
+        tools: Sequence[dict[str, Any]] | None = None,
     ) -> AsyncIterator[LLMEvent]:
-        """Stream a reply to ``messages`` under the ``system`` prompt."""
+        """Stream a reply to ``messages`` under the ``system`` prompt.
+
+        ``tools`` are Anthropic-format tool specs; when the model calls
+        one, :class:`ToolUseRequest` events are yielded before
+        :class:`ResponseComplete`.
+        """
         ...
 
 
@@ -92,9 +108,13 @@ class AnthropicBackend:
         *,
         system: str,
         messages: Sequence[ChatMessage],
+        tools: Sequence[dict[str, Any]] | None = None,
     ) -> AsyncIterator[LLMEvent]:
-        """Yield text deltas from Claude, then a ResponseComplete."""
+        """Yield text deltas (and tool-use requests), then completion."""
         payload = [{"role": m.role, "content": m.content} for m in messages]
+        kwargs: dict[str, Any] = {}
+        if tools:
+            kwargs["tools"] = list(tools)
         try:
             async with self._client.messages.stream(
                 model=self._model,
@@ -102,10 +122,18 @@ class AnthropicBackend:
                 temperature=self._temperature,
                 system=system,
                 messages=payload,  # type: ignore[arg-type]
+                **kwargs,
             ) as stream:
                 async for text in stream.text_stream:
                     yield TextDelta(text)
                 final = await stream.get_final_message()
+            for block in final.content:
+                if block.type == "tool_use":
+                    yield ToolUseRequest(
+                        id=block.id,
+                        name=block.name,
+                        arguments=dict(block.input),
+                    )
             yield ResponseComplete(
                 stop_reason=final.stop_reason,
                 input_tokens=final.usage.input_tokens,

@@ -12,8 +12,8 @@ class ConversationBuffer:
 
     When the buffer exceeds ``max_messages`` the oldest messages are
     dropped, then further trimmed so the history always starts with a
-    user turn (the Anthropic API requires the first message to be from
-    the user).
+    plain-text user turn - never mid-way through a tool-use exchange,
+    which the Anthropic API would reject.
     """
 
     def __init__(self, max_messages: int = 80) -> None:
@@ -22,18 +22,26 @@ class ConversationBuffer:
         self._max_messages = max_messages
         self._messages: list[ChatMessage] = []
 
+    @staticmethod
+    def _is_clean_start(message: ChatMessage) -> bool:
+        return message.role == "user" and isinstance(message.content, str)
+
     def append(self, message: ChatMessage) -> None:
         """Add a message, trimming the oldest ones if over capacity."""
         self._messages.append(message)
         overflow = len(self._messages) - self._max_messages
         if overflow > 0:
             del self._messages[:overflow]
-        while self._messages and self._messages[0].role != "user":
-            del self._messages[0]
+            while self._messages and not self._is_clean_start(self._messages[0]):
+                del self._messages[0]
 
     def pop(self) -> ChatMessage | None:
         """Remove and return the newest message, or None when empty."""
         return self._messages.pop() if self._messages else None
+
+    def truncate(self, length: int) -> None:
+        """Drop every message after the first ``length`` (rollback)."""
+        del self._messages[length:]
 
     def messages(self) -> list[ChatMessage]:
         """Return a copy of the buffered messages, oldest first."""
